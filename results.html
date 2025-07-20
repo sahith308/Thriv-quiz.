@@ -1,0 +1,159 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thriv Quiz Results</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #333;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      color: #fff;
+      font-size: 2.5em;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    #resultsContainer {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .result-item {
+      margin-bottom: 15px;
+      padding: 15px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .result-item:last-child {
+      border-bottom: none;
+    }
+    .result-item p {
+      margin: 5px 0;
+      font-size: 1.1em;
+      color: #2c3e50;
+    }
+    .no-results {
+      text-align: center;
+      font-size: 1.2em;
+      color: #e74c3c;
+      padding: 20px;
+    }
+    .error {
+      color: #e74c3c;
+      text-align: center;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      h1 {
+        font-size: 2em;
+      }
+      #resultsContainer {
+        padding: 15px;
+      }
+      .result-item p {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Thriv Quiz Results</h1>
+  <div id="error" class="error"></div>
+  <div id="resultsContainer">
+    <div id="noResults" class="no-results">No quiz results found.</div>
+    <div id="resultsList"></div>
+  </div>
+  <script>
+    const resultsContainer = document.getElementById('resultsContainer');
+    const noResultsDiv = document.getElementById('noResults');
+    const resultsList = document.getElementById('resultsList');
+    const errorDiv = document.getElementById('error');
+
+    try {
+      const quizResults = JSON.parse(localStorage.getItem('thrivQuizResults') || '[]');
+
+      if (quizResults.length === 0) {
+        noResultsDiv.style.display = 'block';
+        resultsList.style.display = 'none';
+      } else {
+        noResultsDiv.style.display = 'none';
+        resultsList.style.display = 'block';
+
+        quizResults.forEach((result, index) => {
+          if (!result.username || result.score === undefined || !result.timestamp) {
+            console.warn(`Invalid result at index ${index}:`, result);
+            return;
+          }
+          const resultItem = document.createElement('div');
+          resultItem.className = 'result-item';
+          resultItem.innerHTML = `
+            <p><strong>Username:</strong> ${result.username}</p>
+            <p><strong>Score:</strong> ${result.score}/15</p>
+            <p><strong>Submitted:</strong> ${new Date(result.timestamp).toLocaleString()}</p>
+          `;
+          resultsList.appendChild(resultItem);
+        });
+      }
+    } catch (e) {
+      errorDiv.textContent = 'Error loading results. Please try again later.';
+      errorDiv.style.display = 'block';
+      console.error('Error parsing quiz results:', e);
+    }
+  </script>
+</body>
+</html>
