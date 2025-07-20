@@ -1,0 +1,405 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thriv Quiz</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #333;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      color: #fff;
+      font-size: 2.5em;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    .question {
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .question:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    }
+    .question h3 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-size: 1.4em;
+    }
+    .options label {
+      display: block;
+      margin: 15px 0;
+      cursor: pointer;
+      font-size: 1.1em;
+      padding: 10px;
+      border-radius: 5px;
+      transition: background 0.2s ease;
+    }
+    .options label:hover {
+      background: #e8f0fe;
+    }
+    .options input[type="radio"] {
+      margin-right: 10px;
+      accent-color: #3498db;
+    }
+    button {
+      display: block;
+      margin: 30px auto;
+      padding: 12px 30px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 1.2em;
+      font-weight: bold;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+    button:hover {
+      background-color: #2980b9;
+      transform: scale(1.05);
+    }
+    #result {
+      text-align: center;
+      font-size: 1.5em;
+      margin-top: 20px;
+      color: #fff;
+      background: rgba(46, 204, 113, 0.9);
+      padding: 15px;
+      border-radius: 10px;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    #result a {
+      color: #fff;
+      text-decoration: underline;
+      font-weight: bold;
+    }
+    #result a:hover {
+      color: #e8f0fe;
+    }
+    .error {
+      color: #e74c3c;
+      text-align: center;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    #usernameContainer {
+      text-align: center;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    #usernameContainer input {
+      padding: 10px;
+      font-size: 1.1em;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 200px;
+      margin-right: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      .question {
+        padding: 15px;
+      }
+      h1 {
+        font-size: 2em;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 1em;
+      }
+      #usernameContainer input {
+        width: 100%;
+        margin-bottom: 10px;
+        margin-right: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Thriv Quiz</h1>
+  <div id="usernameContainer">
+    <input type="text" id="usernameInput" placeholder="Enter your username" required>
+    <p style="font-size: 0.9em; color: #2c3e50; margin-top: 10px;">(Username must be 1-50 characters)</p>
+    <button id="startQuiz">Start Quiz</button>
+  </div>
+  <div id="error" class="error"></div>
+  <form id="quizForm" class="hidden">
+    <div class="question">
+      <h3>1. What experience do you have with mobile app development frameworks like Flutter or React Native, and how would you approach building a cross-platform app like Thriv's e-commerce and drone delivery platform?</h3>
+      <div class="options">
+        <label><input type="radio" name="q1" value="A"> I've used Flutter to build a basic app and would use it for Thriv to ensure fast development and a consistent UI across iOS and Android.</label>
+        <label><input type="radio" name="q1" value="B"> I've used React Native for web apps only.</label>
+        <label><input type="radio" name="q1" value="C"> I have no experience with cross-platform frameworks.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>2. How would you design a secure user authentication system for the Thriv app to ensure safe logins and protect user data, such as addresses, during the ordering process?</h3>
+      <div class="options">
+        <label><input type="radio" name="q2" value="A"> Implement OAuth 2.0 with third-party providers like Google for secure and easy logins.</label>
+        <label><input type="radio" name="q2" value="B"> Use basic username and password authentication.</label>
+        <label><input type="radio" name="q2" value="C"> Store passwords in plain text for simplicity.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>3. Can you explain how you would integrate a real-time GPS tracking system into the Thriv app to allow users to monitor their drone deliveries?</h3>
+      <div class="options">
+        <label><input type="radio" name="q3" value="A"> Use Google Maps API to display real-time drone locations with periodic updates from the drone's GPS module.</label>
+        <label><input type="radio" name="q3" value="B"> Use a custom-built mapping solution.</label>
+        <label><input type="radio" name="q3" value="C"> Avoid real-time tracking to reduce complexity.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>4. What strategies would you use to optimize the Thriv app's database to store and retrieve user addresses efficiently, ensuring quick processing of delivery orders?</h3>
+      <div class="options">
+        <label><input type="radio" name="q4" value="A"> Use a NoSQL database without indexing.</label>
+        <label><input type="radio" name="q4" value="B"> Use a relational database like MySQL with indexing on address fields to speed up queries.</label>
+        <label><input type="radio" name="q4" value="C"> Store addresses in a flat file.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>5. How would you implement an AI-based navigation system for drones within the Thriv app, ensuring accurate delivery to the user's signal base?</h3>
+      <div class="options">
+        <label><input type="radio" name="q5" value="A"> Use a pre-trained machine learning model with GPS and signal data to guide drones to the signal base.</label>
+        <label><input type="radio" name="q5" value="B"> Develop a custom AI model from scratch.</label>
+        <label><input type="radio" name="q5" value="C"> Use manual navigation inputs only.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>6. What challenges do you foresee in designing a signal-based system that drones can detect at a user's house, and how would you address them?</h3>
+      <div class="options">
+        <label><input type="radio" name="q6" value="A"> Signal interference; I'd use a unique frequency band and error-checking protocols.</label>
+        <label><input type="radio" name="q6" value="B"> No challenges; use standard Wi-Fi signals.</label>
+        <label><input type="radio" name="q6" value="C"> High costs; avoid signal-based systems.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>7. How would you ensure the drone's AI navigation system avoids obstacles and complies with local drone regulations during delivery to a user's signal base?</h3>
+      <div class="options">
+        <label><input type="radio" name="q7" value="A"> Integrate LIDAR and cameras for obstacle detection and check local regulations via an API.</label>
+        <label><input type="radio" name="q7" value="B"> Use only GPS for navigation.</label>
+        <label><input type="radio" name="q7" value="C"> Ignore regulations to speed up delivery.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>8. What hardware or software components would you recommend for the signal base installed at users' homes to communicate effectively with Thriv's drones?</h3>
+      <div class="options">
+        <label><input type="radio" name="q8" value="A"> A low-cost RF beacon with a mobile app interface for user setup and drone communication.</label>
+        <label><input type="radio" name="q8" value="B"> A high-cost satellite-based system.</label>
+        <label><input type="radio" name="q8" value="C"> No signal base; rely on GPS only.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>9. How would you design the Thriv app's user interface to make the login, address-saving, and order placement process intuitive for users of all technical backgrounds?</h3>
+      <div class="options">
+        <label><input type="radio" name="q9" value="A"> Use a clean, step-by-step UI with tooltips and a chatbot for user guidance.</label>
+        <label><input type="radio" name="q9" value="B"> Use a complex UI for advanced users.</label>
+        <label><input type="radio" name="q9" value="C"> Avoid tooltips to simplify the design.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>10. What features would you include in the Thriv app to enhance the customer experience, such as real-time delivery updates or interactive tracking?</h3>
+      <div class="options">
+        <label><input type="radio" name="q10" value="A"> Real-time drone tracking with push notifications and a live map view.</label>
+        <label><input type="radio" name="q10" value="B"> Email updates only.</label>
+        <label><input type="radio" name="q10" value="C"> No tracking features.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>11. Describe a time you worked on a team project involving technology or innovation. How did you handle conflicts or technical challenges, and what role would you play in Thriv's development team?</h3>
+      <div class="options">
+        <label><input type="radio" name="q11" value="A"> I resolved a coding conflict by mediating discussions and would take a collaborative developer role.</label>
+        <label><input type="radio" name="q11" value="B"> I worked alone to avoid conflicts.</label>
+        <label><input type="radio" name="q11" value="C"> I have no team project experience.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>12. If the Thriv app encounters a bug that prevents drones from detecting the signal base, how would you approach debugging and resolving the issue?</h3>
+      <div class="options">
+        <label><input type="radio" name="q12" value="A"> Use log analysis and test signal strength in a controlled environment to identify the issue.</label>
+        <label><input type="radio" name="q12" value="B"> Ignore the bug and focus on other features.</label>
+        <label><input type="radio" name="q12" value="C"> Rebuild the signal system from scratch.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>13. Why are you excited about joining Thriv, and how do you see drone delivery shaping the future of e-commerce and logistics?</h3>
+      <div class="options">
+        <label><input type="radio" name="q13" value="A"> I'm excited about Thriv's innovation; drone delivery will reduce costs and delivery times.</label>
+        <label><input type="radio" name="q13" value="B"> I'm not familiar with Thriv's vision.</label>
+        <label><input type="radio" name="q13" value="C"> Drone delivery has no impact on e-commerce.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>14. What innovative feature would you propose to make Thriv's drone delivery system stand out from competitors like Amazon Prime Air or Wing?</h3>
+      <div class="options">
+        <label><input type="radio" name="q14" value="A"> A subscription model for eco-friendly drone deliveries with carbon offset credits.</label>
+        <label><input type="radio" name="q14" value="B"> Standard delivery without unique features.</label>
+        <label><input type="radio" name="q14" value="C"> Focus on ground delivery instead.</label>
+      </div>
+    </div>
+    <div class="question">
+      <h3>15. How would you balance the need for rapid development of the Thriv app with ensuring safety and reliability in drone deliveries?</h3>
+      <div class="options">
+        <label><input type="radio" name="q15" value="A"> Prioritize safety by conducting thorough testing, even if it delays the launch slightly.</label>
+        <label><input type="radio" name="q15" value="B"> Focus on rapid development and skip testing.</label>
+        <label><input type="radio" name="q15" value="C"> Outsource safety testing to speed up development.</label>
+      </div>
+    </div>
+    <button type="submit" id="submitQuiz">Submit Quiz</button>
+  </form>
+  <div id="result" class="hidden">Thank you for submitting the quiz! Your responses have been saved. <a href="results.html">View all results</a></div>
+  <script>
+    const correctAnswers = {
+      q1: 'A', q2: 'A', q3: 'A', q4: 'B', q5: 'A',
+      q6: 'A', q7: 'A', q8: 'A', q9: 'A', q10: 'A',
+      q11: 'A', q12: 'A', q13: 'A', q14: 'A', q15: 'A'
+    };
+
+    const usernameContainer = document.getElementById('usernameContainer');
+    const usernameInput = document.getElementById('usernameInput');
+    const startQuizButton = document.getElementById('startQuiz');
+    const quizForm = document.getElementById('quizForm');
+    const submitQuizButton = document.getElementById('submitQuiz');
+    const resultDiv = document.getElementById('result');
+    const errorDiv = document.getElementById('error');
+
+    // Validate username and start quiz
+    startQuizButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      const username = usernameInput.value.trim();
+      if (username === '') {
+        errorDiv.textContent = 'Please enter a valid username.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      if (username.length > 50) {
+        errorDiv.textContent = 'Username must be 50 characters or less.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      errorDiv.style.display = 'none';
+      usernameContainer.classList.add('hidden');
+      quizForm.classList.remove('hidden');
+    });
+
+    // Handle quiz submission
+    quizForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      errorDiv.style.display = 'none';
+
+      const formData = new FormData(quizForm);
+      const userAnswers = {};
+      let allAnswered = true;
+
+      for (let i = 1; i <= 15; i++) {
+        const answer = formData.get(`q${i}`);
+        if (!answer) {
+          allAnswered = false;
+          break;
+        }
+        userAnswers[`q${i}`] = answer;
+      }
+
+      if (!allAnswered) {
+        errorDiv.textContent = 'Please answer all questions before submitting.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      let score = 0;
+      for (const question in correctAnswers) {
+        if (userAnswers[question] === correctAnswers[question]) {
+          score++;
+        }
+      }
+
+      const username = usernameInput.value.trim();
+      const result = {
+        username: username,
+        answers: userAnswers,
+        score: score,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        let quizResults = JSON.parse(localStorage.getItem('thrivQuizResults') || '[]');
+        quizResults.push(result);
+        localStorage.setItem('thrivQuizResults', JSON.stringify(quizResults));
+      } catch (e) {
+        errorDiv.textContent = 'Error saving results. Please try again.';
+        errorDiv.style.display = 'block';
+        console.error('Local storage error:', e);
+        return;
+      }
+
+      quizForm.classList.add('hidden');
+      submitQuizButton.classList.add('hidden');
+      resultDiv.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
